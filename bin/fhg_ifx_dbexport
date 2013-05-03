@@ -1,0 +1,137 @@
+#!/bin/bash
+#
+# fhg_ifx_dbexport: dbexport of all user databases (see fhg_ifx_dbexport -h)
+# 
+# Copyright (c) 2012 FuH Entwicklungsgesellschaft mbH, Umkirch, Germany. All rights reserved.
+# Author: Philipp Hoefflin, 2012, hoefflin@fuh-e.de
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation in version 2.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software Foundation,
+# Inc., 675 Mass Ave, Cambridge MA 02139, USA or see <http://www.gnu.org/licenses/>
+#
+#
+EXPORT=dbexport
+# TMPFILE=$( mktemp /tmp/$(basename $0 .sh).XXXXXX) || exit 1
+DBS=
+ERR=0
+COMPRESS=false
+DIR=
+DELETE_OLD=false
+
+# root macht su - informix
+if [ `id -un` = "root" ]; then
+	case "$0" in
+	.*/*) cmd=`pwd`/$0 ;;
+	*)    cmd=$0 ;;
+	esac
+	exec su - informix sh -c "cd $PWD && $cmd $*"
+fi
+
+if [ -z "$INFORMIXDIR" -a -f /usr/local/etc/ifxini ]; then
+	INFORMIXUMGEBUNG=IDS
+	. /usr/local/etc/ifxini || exit 1
+fi	
+
+GET_OPTS=:
+while $GET_OPTS; do
+        case "x$1" in
+        x-*)	
+		case "$1" in
+		--compress)	COMPRESS=: ;;
+		--dir)	shift
+			DIR="$1"
+			;;
+		-h|--help)	echo "$0: Aufruf:" 
+			echo "$0 [--compress|--help|--dir <Sicherungsverzeichnis>|--del] [list of databases]"
+			exit 0 ;;
+		--del)	DELETE_OLD=:
+			;;
+		*)	echo "FEHLER: falscher Parameter '$1'" >&2
+			$0 --help
+			exit 40	;;
+		esac
+		shift 
+		;;
+        *) 	# Ende Optionen
+		GET_OPTS=false
+                ;;
+        esac
+done    
+
+
+trap "rm -f $TMPFILE" EXIT SIGHUP SIGINT SIGQUIT SIGABRT SIGTERM
+
+if [ $# -gt 0 ]; then
+	# Datenbank(en) übergeben
+	DBS="$@"
+else
+	# alle vorhandenen Datenabnken
+	DBS=$(fhg_ifx_getdbnames)
+fi
+
+
+# Sicherungsverz. angegeben
+if [ -n "$DIR" ]; then
+	if [ ! -d "$DIR" -o ! -w "$DIR" ]; then
+		echo "FEHLER: Das Sicherungsverzeichnis '$DIR' existiert nicht oder hat falsche Verzeichnisrechte." >&2
+		exit 17; # FE_FKT
+	fi
+	if cd "$DIR"; then
+		: OK
+	else
+		echo "FEHLER: Change Directory in das Verzeichnis '$DIR' ist fehlgeschlagen" >&2
+		exit 17; # FE_FKT
+	fi
+	
+fi
+
+
+for DB in $DBS; do
+	X_ERR=0
+	OUTFILE=dbexport.out.$DB
+
+	echo "INFO: BEGIN Export Datenbank $DB nach ${DIR:-.}/$DB.exp - `date`"
+	if [ -d $DB.exp ]; then
+		if $DELETE_OLD; then
+			echo "INFO: lösche altes Exportverzeichnis '`pwd`/$DB.exp'" 
+			rm -rf $DB.exp dbexport.out.$DB dbexport.out.$DB.bz2 2>/dev/null
+		fi
+		# löschen nicht erwünscht oder fehlgeschlagen
+		if [ -d $DB.exp ]; then
+			echo "FEHLER: Ein altes Exportverzeichnis '`pwd`/$DB.exp' existiert noch" >&2
+			ERR=99
+			echo "FEHLER: END   ERR: $ERR Export Datenbank $DB: `date`"
+			continue
+		fi
+	fi
+
+	echo "INFO: START dbexport '$DB' - `date`" 
+	dbexport -ss $DB > $OUTFILE
+	X_ERR=$?
+	if grep -q 'dbexport completed' $OUTFILE; then
+		: OK
+	else
+		[ $X_ERR == 0 ] && X_ERR=1
+	fi
+	if [ $X_ERR != 0 ]; then
+		echo "FEHLER: beim Export der Datenbank $DB ERR: $X_ERR"
+	fi
+	if $COMPRESS; then
+		gzip -f $OUTFILE
+		gzip -f $DB.exp/*
+	fi
+	echo "INFO: END   ERR: $X_ERR Export Datenbank $DB: `date`"
+	[ $ERR == 0 ] && ERR=$X_ERR
+	rm -f dbexport.out
+done
+
+exit $ERR

@@ -1,0 +1,110 @@
+#!/bin/bash
+#
+# fhg_ifx_oncheck: basic onchecks (via cron)
+# 
+# Copyright (c) 2012 FuH Entwicklungsgesellschaft mbH, Umkirch, Germany. All rights reserved.
+# Author: Philipp Hoefflin, 2012, hoefflin@fuh-e.de
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation in version 2.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software Foundation,
+# Inc., 675 Mass Ave, Cambridge MA 02139, USA or see <http://www.gnu.org/licenses/>
+#
+# su nach informix und Shellumgebung herstellen
+if [ `id -un` != "informix" ]; then
+	case "$0" in
+	.*/*)	# relativer Pfad
+		cmd=`pwd`/$0
+		;;
+	*)	cmd=$0
+		;;
+	esac
+	exec su - informix sh -c "$cmd $*"
+fi
+
+# Wenn IFX-Umgebung nicht sitzt, dann ifxini verwenden
+if [ -z "$INFORMIXDIR" -a -f /usr/local/etc/ifxini ]; then
+	INFORMIXUMGEBUNG=IDS
+	. /usr/local/etc/ifxini || exit 1
+fi	
+
+# checks ausführen
+ERR=0
+DBS=
+
+# Sperre um Mehrfachaufrufe zu verhindern
+SPERRDAT=/tmp/fhg_ifx_oncheck.PID
+if [ -f $SPERRDAT ]; then
+	echo "WARNUNG: ein vorheriger Lauf des Kommandos $0 ist noch aktiv und muss manuell beendet werden" >&2
+	pstree -p `cat $SPERRDAT`
+	# echo "WARNUNG: und wird beendet" >&2
+	# kill `cat $SPERRDAT`
+	exit 1
+fi
+TMPFILE=$( mktemp /tmp/$(basename $0 .sh).XXXXXX) || exit 1
+trap "rm -f $SPERRDAT $TMPFILE" EXIT SIGHUP SIGINT SIGQUIT SIGABRT SIGTERM
+
+echo $$ > $SPERRDAT
+
+
+# jetzt geht es los
+exec 3>&1	# stdout merken
+exec > $TMPFILE	# stdout+stderr in Datei umlenken
+exec 2>&1
+
+# welche Datenabnken?
+if [ $# -gt 0 ]; then
+	# Datenbank(en) übergeben
+	DBS="$@"
+else
+	# alle vorhandenen Datenabnken
+	DBS=$(fhg_ifx_getdbnames)
+fi
+
+# Datenabnkunabh. Teil
+for OPT in r c; do
+        CMD="oncheck -c$OPT -q -n"
+        echo "## CMD: '$CMD'"
+        $CMD
+        X_ERR=$?
+        [ $ERR -eq 0 ] && ERR=$X_ERR
+        echo "## Ret: $X_ERR ($CMD) ###"
+done
+
+# datenbankabh. Checks
+for DB in $DBS; do
+	for OPT in I D; do
+		CMD="oncheck -c$OPT -q -n $DB"
+		echo "## CMD: '$CMD'"
+		$CMD
+		X_ERR=$?
+		[ $ERR -eq 0 ] && ERR=$X_ERR
+		echo "## Ret: $X_ERR ($CMD) ###"
+	done
+done
+# Ausgaben auch nach Fehlermeldungen durchsuchen
+if [ $ERR -eq 0 ]; then
+	grep -q -i error $TMPFILE && ERR=56
+fi
+
+
+echo "## Exit: $ERR ###"
+cat $TMPFILE >/tmp/fhg_ifx_oncheck.out
+
+if [ $ERR -ne 0 ]; then
+	# Alle Ausgaben auf stdout ausgeben
+	echo "## WARNUNG: #####################################################"
+	echo "## WARNUNG: Oncheck (Informix) meldet eine Warnung/ einen Fehler."
+	echo "## WARNUNG: Bitte Ausgaben überprüfen (lassen)."
+	echo "## WARNUNG: #####################################################"
+	cat $TMPFILE >&3
+fi
+exit $ERR

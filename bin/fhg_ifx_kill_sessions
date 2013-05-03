@@ -1,0 +1,130 @@
+#!/bin/bash
+#
+# fhg_ifx_kill_sessions: terminate all active dbsessions
+# 
+# Copyright (c) 2012 FuH Entwicklungsgesellschaft mbH, Umkirch, Germany. All rights reserved.
+# Author: Philipp Hoefflin, 2012, hoefflin@fuh-e.de
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation in version 2.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software Foundation,
+# Inc., 675 Mass Ave, Cambridge MA 02139, USA or see <http://www.gnu.org/licenses/>
+#
+#
+#*******************************************************************************
+#*** DB-Sitzungen beenden
+#*******************************************************************************
+# root macht su - informix
+
+TPRO=`basename $0`
+DBS=		# Databases
+DB=		# Database
+ERR=0		# Fehlermerker
+VERBOSE=false
+CHECK_FAILED=false
+
+case `id -un`	in
+root) 	# als root aufgerufen
+	case "$0" in
+	.*/*) cmd=`pwd`/$0 ;;
+	*)    cmd=$0 ;;
+	esac
+	exec su - informix sh -c "$cmd $*"
+	;;
+informix) # informix
+	: OK
+	;;
+*)	# andere User dürfen nicht
+	echo "FEHLER: $TPRO darf nur als root oder informix gestartet werden." >&2
+	exit 17 # FE_FKT
+	;;
+esac
+
+# Wenn IFX-Umgebung nicht sitzt, dann ifxini verwenden
+if [ -z "$INFORMIXDIR" -a -f /usr/local/etc/ifxini ]; then
+	INFORMIXUMGEBUNG=IDS
+	. /usr/local/etc/ifxini || exit 1
+fi	
+
+# PATH erweitern
+case "$PATH" in
+/usr/local/bin)	: OK schon drin ;;
+*)		PATH=$PATH:/usr/local/bin ;;
+esac
+
+# Parameterverarbeitung:
+while [ -n "$1" ]; do
+	case "$1" in
+	-h|--help)
+		echo "$TPRO: Aufruf:"
+		echo "$TPRO [-c] [-v] [-h] [DBANME [DBNAME...]] "
+		echo "  -c|--check-failed	Überprüfen ob Sitztungen beendet wirklich wurden"
+		echo "  -v|--verbose		Verbose: SQL-Statement der Sitzungen ausgeben"
+		echo "  -h|--help		Hilfe, dieser Text"
+		echo "  DBNAME		Name der Datenbank(en), deren Sitzungen beendet werden"
+		echo "			Wenn nicht angegeben: Alle lfd. Sitzungen beenden"
+		exit 0
+		;;
+	-v|--verbose)
+		VERBOSE=:
+		;;
+	-c|--check-failed)
+		CHECK_FAILED=:
+		;;
+	*)	# Wenn angegeben nur Sitzungen von dieser/n Datenbank(en) beenden, sonst alle
+		DBS="$DBS $1"
+		;;
+	esac
+	shift
+done
+
+
+# Alle Datenbanken mit laufenden Sitzungen ermitteln
+[ -z "$DBS" ] && DBS=`onstat -g sql | grep "^[0-9]" | awk '{ print $3}' | sort | uniq`
+
+for DB in $DBS; do
+	echo "#####################"
+	echo "Datenbank: '$DB'"
+	echo "#####################"
+	SQLSESSIONS=
+	SQLSESSIONS=`onstat -g sql | grep "^[0-9]" | grep -v 'sysadmin' | awk '{ print $1 " " $3}' | grep " $DB" | awk '{ print $1}'`
+
+	if [ -z "$SQLSESSIONS" ]; then
+		echo "Es gibt keine laufenden Sitzungen zur DB '$DB'."
+	else
+		# Sitzungen beenden
+		for SQLID in $SQLSESSIONS; do
+			$VERBOSE && echo "#################################"
+			$VERBOSE && echo "INFO: Beende SQL-Sitzung '$SQLID'"
+			$VERBOSE && echo "#################################"
+			$VERBOSE && onstat -g sql $SQLID
+
+			echo "### Beende Sitzung $SQLID: 'onmode -z $SQLID' ###"
+			onmode -z $SQLID
+		done
+		
+		if $CHECK_FAILED; then
+			sleep 10
+			# Prüfen ob alle Sitzungen beendet wurden
+			SQLSESSIONS_FAILED=
+			SQLSESSIONS_FAILED=`onstat -g sql | grep "^[0-9]" | awk '{ print $1 " " $3}' | grep " $DB" | awk '{ print $1}'`
+			if [ -z "SQLSESSIONS" ]; then
+				echo "Alle Sitzungen von '$DB' beendet."
+			else
+				echo "Folgende Sitzungen von '$DB' konnten nicht beendet werden:" >&2
+				echo "$SQLSESSIONS_FAILED" >&2
+				ERR=1
+			fi
+		fi
+	fi
+done
+
+exit $ERR

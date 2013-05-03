@@ -1,0 +1,73 @@
+# Je Informix-Umgebung kann hier ein eindeutiger Bezeichner vergeben werden. Zur Herstellung
+# der Umgebung genügt es anschließend die Variable $INFORMIXUMGEBUNG zu setzen und dieses
+# Shell-Skript per 'source' zu verarbeiten.
+# 
+# SONDERFALL:
+# INFORMIXUMGEBUNG=MANUELL -> INFORMIXDIR/INFORMIXSERVER aus der
+# Umgebung übernehmen.
+INFORMIXUMGEBUNG="${INFORMIXUMGEBUNG:-SQL}"
+case "$INFORMIXUMGEBUNG" in
+IDS)    # IDS: Server/DBA-Umgebung
+        INFORMIXDIR=/home/informix/IDS
+        INFORMIXSERVER=ids_shm
+        ONCONFIG=onconfig
+
+        export INFORMIXDIR INFORMIXSERVER ONCONFIG
+        ;;
+# IDSTEST)    # Informix Testinstanz
+#         INFORMIXDIR=/home/informix/IDS
+#         INFORMIXSERVER=ids_shm
+#         ONCONFIG=onconfig
+# 
+#         export INFORMIXDIR INFORMIXSERVER ONCONFIG
+#         ;;
+SQL)    # SQL: Client
+        INFORMIXDIR=/home/informix/SQL
+        INFORMIXSERVER=ids_tcp
+
+        export INFORMIXDIR INFORMIXSERVER
+        ;;
+MANUELL) # MANUELL: manuell Angabe von INFORMIXDIR/INFORMIXSERVER
+        echo "ifxini: INFORMIXDIR:      '$INFORMIXDIR'"
+        echo "ifxini: INFORMIXSERVER:   '$INFORMIXSERVER'"
+        if [ -z "$INFORMIXDIR" -o -z "$INFORMIXSERVER" ]; then
+                echo "ifxini FEHLER: Umgebung unvollständig" >&2
+                sleep 3
+                exit 1
+        fi
+        ;;
+*)      # ungültig
+        echo "ifxini: INFORMIXSERVER '$INFORMIXSERVER' ungültig" >&2
+        sleep 3
+        exit 1
+        ;;
+esac
+unset INFORMIXUMGEBUNG
+
+# ----------------------------------------------
+# ab hier alles gleich
+PATH=$INFORMIXDIR/bin:$PATH
+INFORMIXSQLHOSTS=/home/informix/etc/sqlhosts
+
+export PATH INFORMIXSQLHOSTS
+
+DBDATE=dmy4.
+DBDELIMITER=';'
+
+CLIENT_LOCALE=de_de.8859-15
+DB_LOCALE=de_de.8859-15
+
+export DBDATE DBDELIMITER DB_LOCALE CLIENT_LOCALE
+
+# LD_LIBRARY_PATH vervollständigen
+if [ -d "$INFORMIXDIR/lib/esql" ]; then
+        LD_LIBRARY_PATH=$INFORMIXDIR/lib/esql${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+        export LD_LIBRARY_PATH
+fi
+
+if [ -d "$INFORMIXDIR/lib" ]; then
+        LD_LIBRARY_PATH=$INFORMIXDIR/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+        export LD_LIBRARY_PATH
+fi
+
+# vim:ft=sh

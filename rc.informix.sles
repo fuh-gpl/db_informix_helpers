@@ -1,0 +1,61 @@
+#! /bin/bash
+#
+# informix        Startup script for IBM Informix
+#
+### BEGIN INIT INFO
+# Provides:       informix
+# Required-Start: $network srvmagt
+# Required-Stop:
+# X-UnitedLinux-Should-Start:
+# X-UnitedLinux-Should-Stop:
+# Default-Start:  3 5
+# Default-Stop:
+# Description:    Starting IBM Informix database server
+### END INIT INFO
+
+. /etc/rc.status
+rc_reset
+
+# set informix-Environment
+INFORMIXUMGEBUNG=IDS
+[ -f /usr/local/etc/ifxini ] && . /usr/local/etc/ifxini
+[ -f /etc/sysconfig/informix ] && . /etc/sysconfig/informix
+[ -f /etc/sysconfig/$NAME ] && . /etc/sysconfig/$NAME
+VERSION=$(onstat  -V | sed 's/^.*Version[       ]*\([1][^        ]*\).*$/\1/')
+
+# Value to set as oninits process's oom_score_ad, oder kernels might need oom_adj instead
+IFX_OOM_ADJ_SCORE=-1000
+
+#*******************************************************************************
+#** start main program
+    OPRSYS=`uname`
+    case "${1}" in
+	start)
+	    echo -n "Starting IBM Informix ($VERSION) ... "
+
+	    # nach Informixdir wechseln um einheitliche Bedingungen zu schaffen (z.B. um PWD /root zu verhindern)
+	    cd ${INFORMIXDIR} || exit 1
+	    test x"$IFX_OOM_ADJ_SCORE" != x && echo "$IFX_OOM_ADJ_SCORE" > /proc/self/oom_score_adj
+	    ${INFORMIXDIR}/bin/oninit
+	    rc_status -v
+	    ;;
+	stop)
+	    echo -n "Shutdown IBM Informix ($VERSION) ... "
+	    ${INFORMIXDIR}/bin/onmode -ucky
+	    rc_status -v
+	    ;;
+ 	status) # Sitzungen zeigen
+             ${INFORMIXDIR}/bin/onstat -g ses
+	     rc_status -v
+	    ;;
+	restart)
+	    $0 stop
+	    sleep 4
+	    $0 start
+	    ;;
+	*)
+	    echo "Usage: $0 {start|stop|restart|status}"
+	    exit 1
+    esac
+rc_exit
+#*********************************************************************** END ***

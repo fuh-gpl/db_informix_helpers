@@ -1,0 +1,123 @@
+#!/bin/bash
+#
+# informix        Startup script for IBM Informix
+#
+# chkconfig: - 64 36
+# description: IBM Informix database server.
+# processname: oninit
+### BEGIN INIT INFO
+# Provides:       informix
+# Required-Start: $network 
+# Required-Stop:
+# X-UnitedLinux-Should-Start:
+# X-UnitedLinux-Should-Stop:
+# Default-Start:  3 5
+# Default-Stop:
+# Description:    Starting IBM Informix database server
+### END INIT INFO
+
+# Source function library.
+. /etc/init.d/functions
+
+RETVAL=0
+
+# IFX-Umgebung
+INFORMIXUMGEBUNG=IDS
+NAME="informix-$INFORMIXUMGEBUNG"
+[ -f /usr/local/etc/ifxini ] && . /usr/local/etc/ifxini
+[ -f /etc/sysconfig/informix ] && . /etc/sysconfig/informix
+[ -f /etc/sysconfig/$NAME ] && . /etc/sysconfig/$NAME
+VERSION=$($INFORMIXDIR/bin/onstat  -V | sed 's/^.*Version[       ]*\([1][^        ]*\).*$/\1/')
+
+# Value to set as oninits process's oom_score_ad, oder kernels might need oom_adj instead
+IFX_OOM_ADJ_SCORE=-1000
+
+prog=$NAME
+exec_start=$INFORMIXDIR/bin/oninit
+parm_start=
+exec_stop=$INFORMIXDIR/bin/onmode
+parm_stop="-ucky"
+exec_status=$INFORMIXDIR/bin/onstat
+parm_status="-"
+
+start() {
+	[ -x $exec_start ] || exit 5
+        echo -n $"Starting IBM Informix ($VERSION): "
+	# nach Informixdir wechseln um einheitliche Bedingungen zu schaffen (z.B. um PWD /root zu verhindern)
+	cd ${INFORMIXDIR} || exit 1
+	test x"$IFX_OOM_ADJ_SCORE" != x && echo "$IFX_OOM_ADJ_SCORE" > /proc/self/oom_score_adj
+	$exec_start $parm_start
+        RETVAL=$?
+	if [ $RETVAL -eq 0 ]; then
+	    echo_success
+	else
+	    echo_failure
+	    RETVAL=1
+	fi
+        echo
+        return $RETVA
+}
+stop() {
+        echo -n $"Shutting down IBM Informix ($VERSION): "
+        $exec_stop $parm_stop
+        RETVAL=$?
+	if [ $RETVAL -eq 0 ]; then
+	    echo_success
+	else
+	    echo_failure
+	    RETVAL=1
+	fi
+        echo
+        return $RETVAL
+}
+ifxstatus() {
+	$exec_status $parm_status >/dev/null 2>&1
+	ret=$?
+	case "$ret" in
+	5)	: On-Line
+		echo $"$NAME ($VERSION) is running..."
+		;;
+	-1|255)	# Offline
+		echo $"$NAME ($VERSION) is stopped"
+		RETVAL=3
+		;;
+	*)	# Unknown
+		echo $"$NAME ($VERSION) UNKNOWN"
+		RETVAL=4
+		;;
+	esac
+}
+restart() {
+        stop
+        start
+}
+
+case "$1" in
+  start)
+        start
+        ;;
+  stop)
+        stop
+        ;;
+  restart)
+        restart
+        ;;
+  reload)
+        exit 3
+        ;;
+  force-reload)
+        restart
+        ;;
+  status)
+        ifxstatus
+        ;;
+  condrestart|try-restart)
+        ifxstatus >/dev/null 2>&1 || exit 0
+        restart
+        ;;
+  *)
+        echo $"Usage: $0 {start|stop|restart|condrestart|try-restart|reload|force-reload|status}"
+        exit 3
+esac
+
+exit $RETVAL

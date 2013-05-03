@@ -1,0 +1,175 @@
+#!/bin/bash
+#
+# fhg_ifx_sicherung: backup to disk: 1) dbexport 2) level 0
+# 
+# Copyright (c) 2012 FuH Entwicklungsgesellschaft mbH, Umkirch, Germany. All rights reserved.
+# Author: Philipp Hoefflin, 2012, hoefflin@fuh-e.de
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation in version 2.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software Foundation,
+# Inc., 675 Mass Ave, Cambridge MA 02139, USA or see <http://www.gnu.org/licenses/>
+# 
+TPRO=`basename $0`
+WOCHENTAG=$(date '+%A')
+# LOGFILE=/var/log/$TPRO
+
+case `id -un`	in
+root) 	# als root aufgerufen
+	case "$0" in
+	.*/*) cmd=`pwd`/$0 ;;
+	*)    cmd=$0 ;;
+	esac
+	exec su - informix sh -c "$cmd $*"
+	;;
+informix) # informix 	
+	: OK
+	;;
+*)	# andere User dürfen nicht
+	echo "FEHLER: $TPRO darf nur als root oder informix gestartet werden." >&2
+	exit 17 # FE_FKT	
+	;;
+esac
+
+# Wenn IFX-Umgebung nicht sitzt, dann ifxini verwenden
+if [ -z "$INFORMIXDIR" -a -f /usr/local/etc/ifxini ]; then
+	INFORMIXUMGEBUNG=IDS
+	. /usr/local/etc/ifxini || exit 1
+fi	
+
+# BEGIN
+ERR=0
+LOG_TMP=/var/tmp/${TPRO}.$$
+DASIDIR=/home/informix/DBSAVE/Dbexport
+LOGFILE=$INFORMIXDIR/$TPRO.log
+TAPEDEV=
+KILL_SESSIONS=false
+
+# PATH erweitern
+case "$PATH" in
+/usr/local/bin)	: OK schon drin ;;
+*)		PATH=$PATH:/usr/local/bin ;;
+esac
+
+
+# Parameterverarbeitung:
+GET_OPTS=:
+while $GET_OPTS; do
+        case "x$1" in
+        x-*)	
+		case "$1" in
+		--kill|-kill)	
+			KILL_SESSIONS=: ;;
+		--expdir|-expdir) shift	
+			DASIDIR="$1" 	;;
+		--help|-h)	
+			echo "$0: Aufruf:" 
+			echo "$0 [-kill|-expdir <Verz.>|-h]"
+			echo "  -expdir <Verz>	- Zielverzeichnis für dbexport"
+			echo "  -kill		- vor dem Export werden alle Sitzungen beendet"
+			exit 0 ;;
+		*)	echo "FEHLER: falscher Parameter '$1'"
+			$0 -h 
+			exit 40	;;
+		esac
+		shift 
+		;;
+        *) 	# Ende Optionen
+		GET_OPTS=false
+                ;;
+        esac
+done    
+
+# Parameterprüfung
+if [ ! -d "$DASIDIR" -o ! -w "$DASIDIR" ]; then
+	echo "FEHLER: Verzeichnis '$DASIDIR' existiert nicht oder Schreibrecht fehlt." >&2 
+	exit 17 # FE_FKT
+fi
+
+# Ausgabe umlenken
+exec 3>&1               # Terminal in drittem Kanal sichern, damit das Protokoll am 
+exec >  $LOG_TMP        # Ende auf das Terminal ausgegeben werden kann
+exec 2>&1
+
+# SQL-Sitzungen beenden?
+$KILL_SESSIONS && /usr/local/bin/fhg_ifx_kill_sessions --verbose
+
+
+# Logwechsel durchführen
+LOGSWITCH_CMD=$(type -p fhg_ifx_logswitch)
+[ -z "$LOGSWITCH_CMD" -a -x /usr/local/sbin/fhg_ifx_logswitch ] && LOGSWITCH_CMD=/usr/local/sbin/fhg_ifx_logswitch
+if [ -n "$LOGSWITCH_CMD" ]; then
+	echo "# # # #   Sicherung Informix `uname -n` LOGWECHSEL  - `date "+%A %d.%m.%Y %H:%M:%S"`"
+	echo 
+	$LOGSWITCH_CMD
+	if [ $? -ne 0 ]; then
+		echo "FEHLER: beim Logwechsel" >&2
+	fi
+fi
+
+# alle Datenbanken exportieren
+echo "# # # #   Sicherung Informix `uname -n` DBEXPORT - `date "+%A %d.%m.%Y %H:%M:%S"`"
+echo ""
+fhg_ifx_dbexport --compress --dir "$DASIDIR" --del
+ERR_EXP=$?
+
+# Tapedev aus onconfig ermitteln und Wochentag anhängen
+TAPEDEV=`onstat -c | grep '^TAPEDEV' | awk '{ print $2 }'`
+if [ "$TAPEDEV" = '/dev/null' ]; then
+	echo "TAPEDEV nicht konfiguriert, verwende '$DASIDIR'"
+	TAPEDEV="$DASIDIR"
+fi
+
+# in der Onconfig ist kein Dateiname sondern ein Verzeichnis konfiguriert
+if [ -d "$TAPEDEV" ]; then
+	# analog zum IDS den Dateinamen aufbauen: <rechner>_<servernum aus onconfig>_L0
+	SERVERNUM=`onstat -c | grep '^SERVERNUM' | awk '{ print $2 }'`
+	FILENAME="${IFX_ONTAPE_FILE_PREFIX:-$(hostname)_${SERVERNUM}_L0}"
+	TAPEDEV="$TAPEDEV/$FILENAME"
+	
+	
+fi
+TAPEDEV="${TAPEDEV}-$WOCHENTAG"
+
+# Dateien neu anlegen/überschreiben
+echo "# # # #   Sicherung Informix `uname -n` Level 0  - `date "+%A %d.%m.%Y %H:%M:%S"`"
+echo ""
+echo "Sicherung erfolgt in Datei ($TAPEDEV.gz)"
+echo ""
+
+ontape -s -L 0 -d -t STDIO | gzip >$TAPEDEV.gz
+
+# Rückgabewerte der beiden Pipekommandos sichern und auswerten
+declare -a ERR_LIST=("${PIPESTATUS[@]}")
+ERR_LEVEL0="${ERR_LIST[0]:-99}"
+ERR_GZIP="${ERR_LIST[1]:-99}"
+
+chmod 660 $TAPEDEV.gz
+
+echo "md5-Summer der Sicherungsdatei:"
+md5sum $TAPEDEV.gz
+
+echo ""
+echo "Return-Code  Dbexport: $ERR_EXP Level0 $ERR_LEVEL0 / Gzip: $ERR_GZIP"
+echo "# # # #   Sicherung ENDE - `date "+%A %d.%m.%Y %H:%M:%S"`"
+
+# Rückgabewert setzen
+ERR="$ERR_EXP"
+[ "$ERR" -eq 0 ] && ERR="$ERR_LEVEL0"
+[ "$ERR" -eq 0 ] && ERR="$ERR_GZIP"
+
+# # #   Protokollierung
+cat $LOG_TMP    >> $LOGFILE     # In das Sicherungsprotokoll ausgeben
+cat $LOG_TMP    >&3             # Auf das Terminal ausgeben
+
+rm -f $LOG_TMP
+
+exit $ERR
