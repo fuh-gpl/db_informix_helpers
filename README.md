@@ -9,7 +9,7 @@ ifxini.EXAMPLE:
 Systemwide configfile for database parameters. Install to /usr/local/etc/ifxini.
 
 runlevel-scripts:
---------i--------
+-----------------
 
  * rc.informix.rhel: redhat and alikes
  * rc.informix.sles: suse linux enterprise server
