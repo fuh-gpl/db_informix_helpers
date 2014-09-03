@@ -105,7 +105,7 @@ for DB in $DBS; do
 			$VERBOSE && echo "#################################"
 			$VERBOSE && echo "INFO: Beende SQL-Sitzung '$SQLID'"
 			$VERBOSE && echo "#################################"
-			$VERBOSE && onstat -g sql $SQLID
+			$VERBOSE && onstat -g ses $SQLID
 
 			echo "### Beende Sitzung $SQLID: 'onmode -z $SQLID' ###"
 			onmode -z $SQLID
