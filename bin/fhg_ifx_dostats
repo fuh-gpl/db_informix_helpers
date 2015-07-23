@@ -1,9 +1,11 @@
 #!/bin/bash
 #
-# fhg_ifx_upd_high: update statistics via cron
+# fhg_ifx_upd_high: Wrapper for Art Kagels dostats_ng (see http://www.iiug.org/software/index_ESQLC.html, package utils2_ak)
+# 	
+# dostats_ng needs to be installed seperately	
 # 
-# Copyright (c) 2012 FuH Entwicklungsgesellschaft mbH, Endingen, Germany. All rights reserved.
-# Author: Philipp Hoefflin, 2012, hoefflin@fuh-e.de
+# Copyright (c) 2015 FuH Entwicklungsgesellschaft mbH, Endingen, Germany. All rights reserved.
+# Author: Philipp Hoefflin, 2014, hoefflin@fuh-e.de
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -24,7 +26,7 @@ if [ `id -un` = "root" ]; then
 	.*/*) cmd=`pwd`/$0 ;;
 	*)    cmd=$0 ;;
 	esac
-	exec su - informix sh -c "$cmd $*" </dev/null
+	exec su - informix sh -c "$cmd $*"</dev/null
 fi
 
 # Wenn IFX-Umgebung nicht sitzt, dann ifxini verwenden
@@ -39,7 +41,15 @@ TEMPFILE=/tmp/$TPRO.$$
 DBS=
 GET_OPTS=:
 ERR=0
-DO_UPD_MED=false
+DOSTATS=
+
+# dostats finden Pfad merken
+for _DOSTATS in fhg_ifx_dostats.bin dostats_ng dostats; do
+	DOSTATS=$(type -p $_DOSTATS)
+	if [ -n "$DOSTATS" ]; then
+		break 
+	fi
+done
 
 # Parameter
 while $GET_OPTS; do
@@ -50,6 +60,10 @@ while $GET_OPTS; do
 			echo "$0: Aufruf:" 
 			echo "$0 [--help] [Liste der Datenbanken]"
 			exit 0 ;;
+		-d|--dostats)
+			shift
+			DOSTATS="$1"
+			;;
 		*)	echo "FEHLER: falscher Parameter '$1'"
 			$0 --help
 			exit 40	;;
@@ -61,6 +75,16 @@ while $GET_OPTS; do
                 ;;
         esac
 done    
+
+if [ ! -f "$DOSTATS" ]; then
+	DOSTATS=$(type -p $DOSTATS)
+fi
+if [ ! -f "$DOSTATS" ]; then
+	echo "FEHLER: dostats_ng nicht gefunden nicht gefunden (s. http://www.iiug.org/software/index_ESQLC.html, package utils2_ak)." >&2
+	exit 1
+fi
+
+echo 
 
 if [ $# -gt 0 ]; then
 	# Datenbank(en) übergeben
@@ -78,29 +102,7 @@ echo -e "$TPRO: ### BEGIN\t`date` ###"
 
 for DB in $DBS; do
 	echo -e "$TPRO: ### BEGIN\tDatenbank: '$DB'\t\t`date` ###"
-	rm -f $TEMPFILE.$DB.sql
-	dbaccess  $DB - <<EOF
-	OUTPUT TO "$TEMPFILE.$DB.sql" WITHOUT HEADINGS
-	SELECT	unique "update statistics high for table ",
-	 trim(tabname),
-	 "("||trim(colname)||");"
-	FROM 	systables t, sysindexes i, syscolumns c
-	WHERE	t.tabid = i.tabid
-	AND	t.tabid = c.tabid
-	AND	i.tabid = c.tabid
-	AND	i.part1   = c.colno
-	AND	t.tabtype = "T"
-	AND     t.tabid > 99
-EOF
-	echo -e "$TPRO: ### UPDATE HIGH\t\t`date` ###"
-	dbaccess -e $DB $TEMPFILE.$DB.sql
-	X_ERR=$?
-	[ $ERR == 0 ] && ERR=$X_ERR
-	rm -f $TEMPFILE.$DB.sql
-	echo -e "$TPRO: ### UPDATE\t\t`date` ###"
-	dbaccess -e $DB - <<EOF
-	UPDATE STATISTICS;
-EOF
+	$DOSTATS -d $DB
 	X_ERR=$?
 	[ $ERR == 0 ] && ERR=$X_ERR
 	echo -e "$TPRO: ### END\tDatenbank: '$DB'\t\t`date` ###"

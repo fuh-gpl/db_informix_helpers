@@ -54,10 +54,20 @@ export PATH INFORMIXSQLHOSTS
 DBDATE=dmy4.
 DBDELIMITER=';'
 
-CLIENT_LOCALE=de_de.8859-15
-DB_LOCALE=de_de.8859-15
+# Client-Umgebung abhängig von Locale
+case "$LANG" in
+*.UTF-8|*.utf-8|*.UTF8|*.utf8)
+	# HINWEIS: eventuell SQL_LOGICAL_CHAR in onconfig setzen
+	CLIENT_LOCALE=de_de.UTF8
+	;;
+*)
+	CLIENT_LOCALE=de_de.8859-15
+	;;
+esac
+GL_USEGLU=1
+DB_LOCALE=de_de.UTF8
 
-export DBDATE DBDELIMITER DB_LOCALE CLIENT_LOCALE
+export DBDATE DBDELIMITER DB_LOCALE CLIENT_LOCALE GL_USEGLU
 
 # LD_LIBRARY_PATH vervollständigen
 if [ -d "$INFORMIXDIR/lib/esql" ]; then

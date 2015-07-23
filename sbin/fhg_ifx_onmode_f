@@ -2,7 +2,7 @@
 #
 # fhg_ifx_onmode_f: free unused SHM
 # 
-# Copyright (c) 2012 FuH Entwicklungsgesellschaft mbH, Umkirch, Germany. All rights reserved.
+# Copyright (c) 2012 FuH Entwicklungsgesellschaft mbH, Endingen, Germany. All rights reserved.
 # Author: Philipp Hoefflin, 2012, hoefflin@fuh-e.de
 #
 # This program is free software: you can redistribute it and/or modify
@@ -18,20 +18,35 @@
 # along with this program; if not, write to the Free Software Foundation,
 # Inc., 675 Mass Ave, Cambridge MA 02139, USA or see <http://www.gnu.org/licenses/>
 #
-#
 TPRO=`basename $0`
 TRACEFIL=/tmp/$TPRO.out
 CMD="onmode -F"
 
-echo -e "$TPRO: BEGIN\t'$CMD'\t\t`date`"	>$TRACEFIL
 
-su - informix <<EOF
+# su nach informix und Shellumgebung herstellen
+if [ `id -un` != "informix" ]; then
+        case "$0" in
+        .*/*)   # relativer Pfad
+                cmd=`pwd`/$0
+                ;;
+        *)      cmd=$0
+                ;;
+        esac
+        exec su - informix sh -c "$cmd $*" </dev/null
+fi
+
+echo -e "$TPRO: BEGIN\t'$CMD'\t\t`date`"        >$TRACEFIL
+
+# Wenn IFX-Umgebung nicht sitzt, dann ifxini verwenden
+if [ -z "$INFORMIXDIR" -a -f /usr/local/etc/ifxini ]; then
 	INFORMIXUMGEBUNG=IDS
 	. /usr/local/etc/ifxini || exit 1
-	$CMD
-EOF
+fi	
+
+$CMD
 ERR=$?
 
-echo -e "$TPRO: END\t'$CMD' Exit: $ERR\t`date`"	>>$TRACEFIL
+echo -e "$TPRO: END\t'$CMD' Exit: $ERR\t`date`" >>$TRACEFIL
 
 exit $ERR
+

@@ -2,7 +2,7 @@
 #
 # fhg_ifx_kill_sessions: terminate all active dbsessions
 # 
-# Copyright (c) 2012 FuH Entwicklungsgesellschaft mbH, Umkirch, Germany. All rights reserved.
+# Copyright (c) 2012 FuH Entwicklungsgesellschaft mbH, Endingen, Germany. All rights reserved.
 # Author: Philipp Hoefflin, 2012, hoefflin@fuh-e.de
 #
 # This program is free software: you can redistribute it and/or modify
@@ -37,7 +37,7 @@ root) 	# als root aufgerufen
 	.*/*) cmd=`pwd`/$0 ;;
 	*)    cmd=$0 ;;
 	esac
-	exec su - informix sh -c "$cmd $*"
+	exec su - informix sh -c "$cmd $*"  </dev/null
 	;;
 informix) # informix
 	: OK

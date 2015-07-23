@@ -2,7 +2,7 @@
 #
 # fhg_ifx_getdbnames: list all user databases (excluding sys-databases)
 # 
-# Copyright (c) 2012 FuH Entwicklungsgesellschaft mbH, Umkirch, Germany. All rights reserved.
+# Copyright (c) 2012 FuH Entwicklungsgesellschaft mbH, Endingen, Germany. All rights reserved.
 # Author: Philipp Hoefflin, 2012, hoefflin@fuh-e.de
 #
 # This program is free software: you can redistribute it and/or modify
@@ -23,7 +23,7 @@ if [ `id -un` = "root" ]; then
 	.*/*) cmd=`pwd`/$0 ;;
 	*)    cmd=$0 ;;
 	esac
-	exec su - informix sh -c "$cmd $*"
+	exec su - informix sh -c "$cmd $*" </dev/null
 fi
 if [ -z "$INFORMIXDIR" -a -f /usr/local/etc/ifxini ]; then
 	INFORMIXUMGEBUNG=IDS

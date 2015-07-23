@@ -2,7 +2,7 @@
 #
 # fhg_ifx_oncheck: basic onchecks (via cron)
 # 
-# Copyright (c) 2012 FuH Entwicklungsgesellschaft mbH, Umkirch, Germany. All rights reserved.
+# Copyright (c) 2012 FuH Entwicklungsgesellschaft mbH, Endingen, Germany. All rights reserved.
 # Author: Philipp Hoefflin, 2012, hoefflin@fuh-e.de
 #
 # This program is free software: you can redistribute it and/or modify
@@ -27,7 +27,7 @@ if [ `id -un` != "informix" ]; then
 	*)	cmd=$0
 		;;
 	esac
-	exec su - informix sh -c "$cmd $*"
+	exec su - informix sh -c "$cmd $*" </dev/null
 fi
 
 # Wenn IFX-Umgebung nicht sitzt, dann ifxini verwenden
