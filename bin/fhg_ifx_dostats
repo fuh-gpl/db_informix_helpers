@@ -43,6 +43,8 @@ GET_OPTS=:
 ERR=0
 DOSTATS=
 
+unset GL_USEGLU 2>/dev/null
+
 # dostats finden Pfad merken
 for _DOSTATS in fhg_ifx_dostats.bin dostats_ng dostats; do
 	DOSTATS=$(type -p $_DOSTATS)

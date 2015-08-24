@@ -5,25 +5,20 @@
 # SONDERFALL:
 # INFORMIXUMGEBUNG=MANUELL -> INFORMIXDIR/INFORMIXSERVER aus der
 # Umgebung übernehmen.
-INFORMIXUMGEBUNG="${INFORMIXUMGEBUNG:-SQL}"
+INFORMIXUMGEBUNG="${INFORMIXUMGEBUNG:-IDS}"
 case "$INFORMIXUMGEBUNG" in
 IDS)    # IDS: Server/DBA-Umgebung
         INFORMIXDIR=/home/informix/IDS
         INFORMIXSERVER=ids_shm
         ONCONFIG=onconfig
-
-        export INFORMIXDIR INFORMIXSERVER ONCONFIG
+	GL_USEGLU=1; 		# GL_USEGLU muss in Serverumgebung gesetzt sein 	
+	
+        export INFORMIXDIR INFORMIXSERVER ONCONFIG GL_USEGLU
         ;;
-# IDSTEST)    # Informix Testinstanz
-#         INFORMIXDIR=/home/informix/IDS
-#         INFORMIXSERVER=ids_shm
-#         ONCONFIG=onconfig
-# 
-#         export INFORMIXDIR INFORMIXSERVER ONCONFIG
-#         ;;
 SQL)    # SQL: Client
         INFORMIXDIR=/home/informix/SQL
         INFORMIXSERVER=ids_tcp
+	unset GL_USEGLU 2>/dev/null; 	# sicherstellen, dass GL_USEGLU in Clientumgebung NICHT sitzt
 
         export INFORMIXDIR INFORMIXSERVER
         ;;
@@ -64,10 +59,13 @@ case "$LANG" in
 	CLIENT_LOCALE=de_de.8859-15
 	;;
 esac
-GL_USEGLU=1
 DB_LOCALE=de_de.UTF8
 
-export DBDATE DBDELIMITER DB_LOCALE CLIENT_LOCALE GL_USEGLU
+export DBDATE DBDELIMITER DB_LOCALE CLIENT_LOCALE  
+
+# s. ids_machine_notes_12.10.txt
+INFORMIXSTACKSIZE=128
+export INFORMIXSTACKSIZE
 
 # LD_LIBRARY_PATH vervollständigen
 if [ -d "$INFORMIXDIR/lib/esql" ]; then
@@ -77,6 +75,11 @@ fi
 
 if [ -d "$INFORMIXDIR/lib" ]; then
         LD_LIBRARY_PATH=$INFORMIXDIR/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+        export LD_LIBRARY_PATH
+fi
+
+if [ -d "$INFORMIXDIR/gls/dll" ]; then
+        LD_LIBRARY_PATH=$INFORMIXDIR/gls/dll${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
         export LD_LIBRARY_PATH
 fi
 
