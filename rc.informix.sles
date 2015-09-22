@@ -22,6 +22,7 @@ INFORMIXUMGEBUNG=IDS
 [ -f /etc/sysconfig/informix ] && . /etc/sysconfig/informix
 [ -f /etc/sysconfig/$NAME ] && . /etc/sysconfig/$NAME
 VERSION=$(onstat  -V | sed 's/^.*Version[       ]*\([1][^        ]*\).*$/\1/')
+LANG=de_DE.UTF-8
 
 # Value to set as oninits process's oom_score_ad, oder kernels might need oom_adj instead
 IFX_OOM_ADJ_SCORE=-1000
