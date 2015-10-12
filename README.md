@@ -3,7 +3,7 @@ db_informix_helpers
 
 Misc scripts to make life with informix databases easier
 
-ifxini.EXAMPLE:
+ifxini.EXAMPLE.j2:
 ---------------
 
 Systemwide configfile for database parameters. Install to /usr/local/etc/ifxini.

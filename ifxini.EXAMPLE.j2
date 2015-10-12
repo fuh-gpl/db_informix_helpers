@@ -5,19 +5,19 @@
 # SONDERFALL:
 # INFORMIXUMGEBUNG=MANUELL -> INFORMIXDIR/INFORMIXSERVER aus der
 # Umgebung übernehmen.
-INFORMIXUMGEBUNG="${INFORMIXUMGEBUNG:-IDS}"
+INFORMIXUMGEBUNG="${INFORMIXUMGEBUNG:-{{ informix_umgebung_default }}}"
 case "$INFORMIXUMGEBUNG" in
 IDS)    # IDS: Server/DBA-Umgebung
-        INFORMIXDIR=/home/informix/IDS
-        INFORMIXSERVER=ids_shm
-        ONCONFIG=onconfig
+        INFORMIXDIR="{{ informix_base }}/IDS"
+        INFORMIXSERVER="{{ informix_srv }}"
+        ONCONFIG="onconfig"
 	GL_USEGLU=1; 		# GL_USEGLU muss in Serverumgebung gesetzt sein 	
 	
         export INFORMIXDIR INFORMIXSERVER ONCONFIG GL_USEGLU
         ;;
 SQL)    # SQL: Client
-        INFORMIXDIR=/home/informix/SQL
-        INFORMIXSERVER=ids_tcp
+        INFORMIXDIR="{{ informix_base }}/SQL"
+        INFORMIXSERVER="{{ informix_srv }}"
 	unset GL_USEGLU 2>/dev/null; 	# sicherstellen, dass GL_USEGLU in Clientumgebung NICHT sitzt
 
         export INFORMIXDIR INFORMIXSERVER
@@ -41,12 +41,12 @@ unset INFORMIXUMGEBUNG
 
 # ----------------------------------------------
 # ab hier alles gleich
-PATH=$INFORMIXDIR/bin:$PATH
-INFORMIXSQLHOSTS=/home/informix/etc/sqlhosts
+PATH="$INFORMIXDIR/bin:$PATH"
+INFORMIXSQLHOSTS="{{ informix_base }}/etc/sqlhosts"
 
 export PATH INFORMIXSQLHOSTS
 
-DBDATE=dmy4.
+DBDATE="dmy4."
 DBDELIMITER=';'
 
 # Client-Umgebung abhängig von Locale
@@ -59,7 +59,7 @@ case "$LANG" in
 	CLIENT_LOCALE=de_de.8859-15
 	;;
 esac
-DB_LOCALE=de_de.UTF8
+DB_LOCALE="{{ informix_dblocale }}"
 
 export DBDATE DBDELIMITER DB_LOCALE CLIENT_LOCALE  
 
@@ -69,17 +69,17 @@ export INFORMIXSTACKSIZE
 
 # LD_LIBRARY_PATH vervollständigen
 if [ -d "$INFORMIXDIR/lib/esql" ]; then
-        LD_LIBRARY_PATH=$INFORMIXDIR/lib/esql${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+        LD_LIBRARY_PATH="$INFORMIXDIR/lib/esql${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
         export LD_LIBRARY_PATH
 fi
 
 if [ -d "$INFORMIXDIR/lib" ]; then
-        LD_LIBRARY_PATH=$INFORMIXDIR/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+        LD_LIBRARY_PATH="$INFORMIXDIR/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
         export LD_LIBRARY_PATH
 fi
 
 if [ -d "$INFORMIXDIR/gls/dll" ]; then
-        LD_LIBRARY_PATH=$INFORMIXDIR/gls/dll${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+        LD_LIBRARY_PATH="$INFORMIXDIR/gls/dll${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
         export LD_LIBRARY_PATH
 fi
 
