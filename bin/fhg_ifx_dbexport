@@ -117,7 +117,7 @@ for DB in $DBS; do
 	echo "INFO: START dbexport '$DB' - `date`" 
 	dbexport -ss $DB > $OUTFILE
 	X_ERR=$?
-	if grep -q 'dbexport completed' $OUTFILE; then
+	if egrep -q 'dbexport (completed|beendet)' $OUTFILE; then
 		: OK
 	else
 		[ $X_ERR == 0 ] && X_ERR=1
